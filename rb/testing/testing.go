@@ -1,6 +1,9 @@
 package testing
 
-import "testing"
+import (
+	"testing"
+	"fmt"
+)
 
 func SliceEquals(a, b []int) bool {
 	if a == nil && b == nil {
@@ -23,6 +26,18 @@ func SliceEquals(a, b []int) bool {
 func AssertTrue(t *testing.T, msg string, pred bool) {
 	if !pred {
 		t.Log(msg)
+		t.Fail()
+	}
+}
+
+func FailWithMessage(t *testing.T, message string) {
+	t.Log(message)
+	t.Fail()
+}
+
+func AssertEquals(t *testing.T, msg string, expected string, actual string) {
+	if expected != actual {
+		t.Log(fmt.Sprintf("%s, expected %s, got %s", msg, expected, actual))
 		t.Fail()
 	}
 }

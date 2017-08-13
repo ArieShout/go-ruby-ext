@@ -2,16 +2,16 @@ package rb
 
 import (
 	"testing"
-	h "github.com/ArieShout/go-ruby/rb/testing"
+	h "github.com/ArieShout/go-ruby-ext/rb/testing"
 )
 
 func TestRange_First(t *testing.T) {
 	r := NewRange(1, 3)
-	if !h.SliceEquals(r.First(1), []int{1}) {
+	if !h.SliceEquals(r.FirstSlice(1), []int{1}) {
 		t.Log("First(1) does not equal to []int{1}")
 		t.Fail()
 	}
-	if !h.SliceEquals(r.First(5), []int{1, 2, 3}) {
+	if !h.SliceEquals(r.FirstSlice(5), []int{1, 2, 3}) {
 		t.Log("First(5) does not equal to []int{1, 2, 3}")
 		t.Fail()
 	}

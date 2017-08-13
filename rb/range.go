@@ -85,21 +85,19 @@ func (r Range) IsEql(obj interface{}) bool {
 	return false
 }
 
-func (r Range) First(limit int) []int {
+func (r Range) First() (ret int, ok bool) {
+	ret = r.Begin
+	ok = r.Begin <= r.actualEnd()
+	return
+}
+
+func (r Range) FirstSlice(limit int) []int {
 	ret := make([]int, 0, limit)
 	for count, i, end := 0, r.Begin, r.actualEnd(); count < limit && i <= end; i++ {
 		ret = append(ret, i)
 		count++
 	}
 	return ret
-}
-
-func (r Range) FirstElem() (ret int, ok bool) {
-	end := r.actualEnd()
-	if r.Begin > end {
-		return
-	}
-	return r.Begin, true
 }
 
 func (r Range) IsInclude(obj interface{}) bool {
