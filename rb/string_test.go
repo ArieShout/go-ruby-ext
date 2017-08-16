@@ -109,3 +109,19 @@ func TestString_Dump(t *testing.T) {
 	assert.Equal(t, `"a\v"`, NewString("a\013").Dump().Value, `\"hello \\n ''\".Dump()`)
 	assert.Equal(t, `"a\xC4"`, NewString("a\xC4").Dump().Value, `\"hello \\n ''\".Dump()`)
 }
+
+func TestString_EachLine(t *testing.T) {
+	result := make([]string, 0, 5)
+	NewString("a\nb").EachLine(NewString(""), func(line String) {
+		result = append(result, line.Value)
+	})
+	assert.Equal(t, []string{"a", "b"}, result, "a\\nb")
+}
+
+func TestString_Lines(t *testing.T) {
+	assert.Equal(t, []String{NewString("a"), NewString("b")}, NewString("a\nb").Lines(NewString("\n")), "a\\nb")
+	assert.Equal(t, []String{NewString("a"), NewString("")}, NewString("a\n").Lines(NewString("\n")), "a\\n")
+	assert.Equal(t, []String{NewString(""), NewString("b")}, NewString("\nb").Lines(NewString("\n")), "\\nb")
+	assert.Equal(t, []String{NewString("a")}, NewString("a").Lines(NewString("\n")), "a")
+	assert.Equal(t, []String{NewString("a"), NewString("b")}, NewString("a\r\nb").Lines(NewString("\r\n")), "a\\r\\nb")
+}

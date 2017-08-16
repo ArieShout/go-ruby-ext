@@ -490,6 +490,60 @@ func (str String) Dump() String {
 	return NewString(buffer.String())
 }
 
+func (str String) EachByte(action func(byte)) (ret String) {
+	ret = str
+	defer RecoverBreak("")
+	for i := 0; i < len(str.Value); i++ {
+		action(str.Value[i])
+	}
+	return
+}
+
+func (str String) EachChar(action func(string)) (ret String) {
+	return str.EachCodepoint(func(r rune) {
+		action(string(r))
+	})
+}
+
+func (str String) EachCodepoint(action func(rune)) (ret String) {
+	ret = str
+	defer RecoverBreak("")
+	var r rune
+	width := 0
+	for i := 0; i < len(str.Value); i += width {
+		r, width = utf8.DecodeRuneInString(str.Value[i:])
+		if r == utf8.RuneError && width <= 1 {
+			panic("Invalid char at position " + strconv.Itoa(i))
+		}
+		action(r)
+	}
+	return
+}
+
+func (str String) EachLine(separator String, action func(String)) (ret String) {
+	ret = str
+	if separator.Value == "" {
+		separator = NewString("\n")
+	}
+	for i := 0; i < len(str.Value); {
+		idx := strings.Index(str.Value[i:], separator.Value)
+		if idx >= 0 {
+			action(NewString(str.Value[i:i+idx]))
+			i += idx + len(separator.Value)
+			if i == len(str.Value) {
+				// the separator is at the end of the String
+				action(NewString(""))
+			}
+		} else {
+			action(NewString(str.Value[i:]))
+			break
+		}
+	}
+	return
+}
+
+// TODO encode?
+
 func (str String) EndWith(suffix String, otherSuffixes ...String) bool {
 	if strings.HasSuffix(str.Value, suffix.Value) {
 		return true
@@ -502,12 +556,47 @@ func (str String) EndWith(suffix String, otherSuffixes ...String) bool {
 	return false
 }
 
+func (str String) GetByte(index int) byte {
+	return str.Value[index]
+}
+
+type subValues interface {
+	getValue()
+}
+
+func (str String) Gsub(re regexp.Regexp, replacement interface{}) String {
+	indexes := re.FindAllStringSubmatchIndex(str.Value, -1)
+	if indexes == nil {
+		return NewString(str.Value)
+	}
+	for _, pos := range indexes {
+
+	}
+}
+
+func (str String) IsEql(obj interface{}) bool {
+	if rhs, ok := obj.(String); ok {
+		return str.Value == rhs.Value
+	}
+	return false
+}
+
 func (str String) IsEmpty() bool {
 	return str.Value == ""
 }
 
+
+
 func (str String) Length() int {
 	return utf8.RuneCountInString(str.Value)
+}
+
+func (str String) Lines(separator String) []String {
+	lines := make([]String, 0, 1)
+	str.EachLine(separator, func(line String) {
+		lines = append(lines, line)
+	})
+	return lines
 }
 
 func (str String) StartWith(prefix String, otherPrefixes ...String) bool {
