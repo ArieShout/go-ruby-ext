@@ -2,19 +2,13 @@ package rb
 
 import (
 	"testing"
-	h "github.com/ArieShout/go-ruby-ext/rb/testing"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRange_First(t *testing.T) {
 	r := NewRange(1, 3)
-	if !h.SliceEquals(r.FirstSlice(1), []int{1}) {
-		t.Log("First(1) does not equal to []int{1}")
-		t.Fail()
-	}
-	if !h.SliceEquals(r.FirstSlice(5), []int{1, 2, 3}) {
-		t.Log("First(5) does not equal to []int{1, 2, 3}")
-		t.Fail()
-	}
+	assert.Equal(t, []int{1}, r.FirstSlice(1), `(1..3).FirstSlice(1)`)
+	assert.Equal(t, []int{1, 2, 3}, r.FirstSlice(5), `(1..3).FirstSlice(5)`)
 }
 
 func TestRange_Each(t *testing.T) {
@@ -25,12 +19,12 @@ func TestRange_Each(t *testing.T) {
 		}
 		r = append(r, i)
 	})
-	h.AssertTrue(t, "Break on Each", h.SliceEquals(r, []int{1, 2}))
+	assert.Equal(t, []int{1, 2}, r, "Break on Each")
 }
 
 func TestRange_ToS(t *testing.T) {
-	h.AssertTrue(t, "Empty range", NewRange(1, 0).ToS() == "[]")
-	h.AssertTrue(t, "One element range", NewRange(1, 1).ToS() == "[1]")
-	h.AssertTrue(t, "Two elements range", NewRange(1, 2).ToS() == "[1, 2]")
-	h.AssertTrue(t, "Exclude end range", NewRangeExclusive(1, 3).ToS() == "[1, 2]")
+	assert.Equal(t, "[]", NewRange(1, 0).ToS(), "Empty range")
+	assert.Equal(t, "[1]", NewRange(1, 1).ToS(), "One element range")
+	assert.Equal(t, "[1, 2]", NewRange(1, 2).ToS(), "Two elements range")
+	assert.Equal(t, "[1, 2]", NewRangeExclusive(1, 3).ToS(), "Exclude end range")
 }

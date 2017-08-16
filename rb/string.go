@@ -6,6 +6,7 @@ import (
 	"strings"
 	"regexp"
 	"unicode/utf8"
+	"strconv"
 )
 
 type AsString interface {
@@ -74,6 +75,10 @@ func (str String) Concat(args ...interface{}) String {
 	return NewString(buf.String())
 }
 
+func (str String) OpLtLt(args ...interface{}) String {
+	return str.Concat(args)
+}
+
 func (str String) OpSpaceShip(rhs String) int {
 	return strings.Compare(str.Value, rhs.Value)
 }
@@ -102,7 +107,7 @@ func (str String) OpMatch(re regexp.Regexp) int {
 
 func (str String) OpSubscript(arg interface{}) (ret String, found bool) {
 	if index, ok := arg.(int); ok {
-		strLen := utf8.RuneCountInString(str.Value)
+		strLen := str.Length()
 		if index < 0 {
 			// negative index
 			index += strLen
@@ -120,12 +125,18 @@ func (str String) OpSubscript(arg interface{}) (ret String, found bool) {
 		return
 	}
 	if rng, ok := arg.(Range); ok {
-		buf := make([]rune, 0, rng.Size())
-		first, ok := rng.First()
-		if !ok {
-			return
+		first := rng.First()
+		last := rng.Last()
+		if last < 0 {
+			last = str.Length() + last
 		}
-		last, _ := rng.Last()
+		if rng.ExcludeEnd() {
+			last -= 1
+		}
+		if last < first {
+			return NewString(""), true
+		}
+		buf := make([]rune, 0, last-first+1)
 		i := 0
 		for _, r := range str.Value {
 			if i > last {
@@ -167,7 +178,7 @@ func (str String) OpSubscript2(arg1, arg2 interface{}) (ret String, found bool) 
 			if length < 0 {
 				return
 			}
-			return str.OpSubscript(NewRangeExclusive(start, start + length))
+			return str.OpSubscript(NewRangeExclusive(start, start+length))
 		}
 		goto TYPE_ERR
 	}
@@ -187,7 +198,7 @@ func (str String) OpSubscript2(arg1, arg2 interface{}) (ret String, found bool) 
 		goto TYPE_ERR
 	}
 
-	TYPE_ERR:
+TYPE_ERR:
 	panic("Arguments type must be one of: (int, int), (*Regexp, int)")
 }
 
@@ -230,12 +241,285 @@ func (str String) IsCasecmp(rhs String) bool {
 	return str.Downcase().OpEquals(rhs.Downcase())
 }
 
-func (str String) Center(width int, padstr string) String {
+func fillToLength(str String, length int) string {
+	var buf bytes.Buffer
+	strLen := str.Length()
+	for ; length > 0; length -= strLen {
+		if length > strLen {
+			buf.WriteString(str.Value)
+		} else {
+			substr, _ := str.OpSubscript2(0, length)
+			buf.WriteString(substr.Value)
+		}
+	}
+	return buf.String()
+}
 
+func (str String) Center(width int) String {
+	return str.Center2(width, NewString(" "))
+}
+
+func (str String) Center2(width int, padstr String) String {
+	if padstr.IsEmpty() {
+		panic("Empty padding")
+	}
+	strLen := str.Length()
+	leftPad := (width - strLen) / 2
+	rightPad := width - strLen - leftPad
+	return NewString(fillToLength(padstr, leftPad) + str.Value + fillToLength(padstr, rightPad))
+}
+
+func (str String) Chars() []String {
+	chars := make([]String, str.Length())
+	i := 0
+	for _, c := range str.Value {
+		chars[i] = NewString(string(c))
+		i++
+	}
+	return chars
+}
+
+func (str String) Chars_() []rune {
+	chars := make([]rune, str.Length())
+	i := 0
+	for _, c := range str.Value {
+		chars[i] = c
+		i++
+	}
+	return chars
+}
+
+func (str String) Chomp() String {
+	return str.Chomp1(NewString("\n"))
+}
+
+func (str String) Chomp1(separator String) String {
+	if separator.IsEmpty() || !str.EndWith(separator) {
+		return str
+	}
+	result, _ := str.OpSubscript(NewRangeExclusive(0, -separator.Length()))
+	return result
+}
+
+func trSetupTable(charSet String, includes, excludes map[rune]bool, intersect *bool) {
+	tr := tr{charSet.Value}
+	target := includes
+	isIntersect := *intersect
+	if tr.IsNegative() {
+		target = excludes
+		isIntersect = false
+	} else {
+		if isIntersect {
+			for k, v := range target {
+				if v {
+					target[k] = false
+				} else {
+					delete(target, k)
+				}
+			}
+		}
+		*intersect = true
+	}
+	iter := tr.LazyChars()
+	for {
+		r, ok := iter()
+		if !ok {
+			break
+		}
+		if isIntersect {
+			_, ok = target[r]
+			if ok {
+				target[r] = true
+			}
+		} else {
+			target[r] = true
+		}
+	}
+}
+
+func (str String) Count(charset String, otherCharsets ...String) int {
+	includes := make(map[rune]bool)
+	excludes := make(map[rune]bool)
+
+	intersect := false
+
+	trSetupTable(charset, includes, excludes, &intersect)
+	for _, s := range otherCharsets {
+		trSetupTable(s, includes, excludes, &intersect)
+	}
+
+	count := 0
+	for _, r := range str.Value {
+		if _, ok := excludes[r]; ok {
+			continue
+		}
+
+		if v, ok := includes[r]; ok && v {
+			count++
+		}
+	}
+	return count
+}
+
+// TODO crypt
+
+func (str String) Delete(charset String, otherCharset ...String) String {
+	includes := make(map[rune]bool)
+	excludes := make(map[rune]bool)
+	intersect := false
+
+	trSetupTable(charset, includes, excludes, &intersect)
+	for _, s := range otherCharset {
+		trSetupTable(s, includes, excludes, &intersect)
+	}
+
+	remain := make([]rune, 0, str.Length())
+	for _, r := range str.Value {
+		if _, ok := excludes[r]; !ok {
+			if v, ok := includes[r]; ok && v {
+				continue
+			}
+		}
+
+		remain = append(remain, r)
+	}
+
+	return NewString(string(remain))
+}
+
+func (str String) DeletePrefix(prefix String) String {
+	if str.StartWith(prefix) {
+		return NewString(str.Value[len(prefix.Value):])
+	}
+	return NewString(str.Value)
 }
 
 func (str String) Downcase() String {
 	return NewString(strings.ToLower(str.Value))
+}
+
+func (str String) Dump() String {
+	width := 0
+	var r rune
+	bufLen := 2 // ""
+	for i := 0; i < len(str.Value); i += width {
+		r, width = utf8.DecodeRuneInString(str.Value[i:])
+		if r == utf8.RuneError {
+			if width == 0 {
+				break
+			}
+			if width == 1 {
+				bufLen += 4
+				continue
+			}
+		}
+		switch r {
+		case '"', '\\', '\n', '\r', '\t', '\f', '\013', '\010', '\007', '\033':
+			bufLen += 2
+		default:
+			if r <= 0x7F {
+				if strconv.IsPrint(r) {
+					bufLen += 1
+				} else {
+					bufLen += 4 // \xNN
+				}
+			} else if r <= 0xFFFF {
+				bufLen += 6 // \uXXXX
+			} else {
+				bufLen += 10 // \uXXXXXXXX
+			}
+		}
+	}
+
+	buffer := bytes.NewBuffer(make([]byte, 0, bufLen))
+	buffer.WriteByte('"')
+	for i := 0; i < len(str.Value); i += width {
+		r, width = utf8.DecodeRuneInString(str.Value[i:])
+		if r == utf8.RuneError {
+			if width == 0 {
+				break
+			} else if width == 1 {
+				buffer.WriteString(fmt.Sprintf("\\x%02X", str.Value[i]))
+				continue
+			}
+		}
+		switch r {
+		case '"', '\\':
+			buffer.WriteByte('\\')
+			buffer.WriteByte(byte(r))
+		case '\n':
+			buffer.WriteByte('\\')
+			buffer.WriteByte('n')
+		case '\r':
+			buffer.WriteByte('\\')
+			buffer.WriteByte('r')
+		case '\t':
+			buffer.WriteByte('\\')
+			buffer.WriteByte('t')
+		case '\f':
+			buffer.WriteByte('\\')
+			buffer.WriteByte('f')
+		case '\013':
+			buffer.WriteByte('\\')
+			buffer.WriteByte('v')
+		case '\010':
+			buffer.WriteByte('\\')
+			buffer.WriteByte('b')
+		case '\007':
+			buffer.WriteByte('\\')
+			buffer.WriteByte('a')
+		case '\033':
+			buffer.WriteByte('\\')
+			buffer.WriteByte('e')
+		default:
+			if r <= 0x7F && strconv.IsPrint(r) {
+				buffer.WriteByte(byte(r))
+			} else {
+				buffer.WriteByte('\\')
+				if r <= 0x7F {
+					buffer.WriteString(fmt.Sprintf("x%02X", r))
+				} else if r <= 0xFFFF {
+					buffer.WriteString(fmt.Sprintf("u%04X", r))
+				} else {
+					buffer.WriteString(fmt.Sprintf("u%08X", r))
+				}
+			}
+		}
+	}
+	buffer.WriteByte('"')
+	return NewString(buffer.String())
+}
+
+func (str String) EndWith(suffix String, otherSuffixes ...String) bool {
+	if strings.HasSuffix(str.Value, suffix.Value) {
+		return true
+	}
+	for _, s := range otherSuffixes {
+		if strings.HasSuffix(str.Value, s.Value) {
+			return true
+		}
+	}
+	return false
+}
+
+func (str String) IsEmpty() bool {
+	return str.Value == ""
+}
+
+func (str String) Length() int {
+	return utf8.RuneCountInString(str.Value)
+}
+
+func (str String) StartWith(prefix String, otherPrefixes ...String) bool {
+	if strings.HasPrefix(str.Value, prefix.Value) {
+		return true
+	}
+	for _, s := range otherPrefixes {
+		if strings.HasPrefix(str.Value, s.Value) {
+			return true
+		}
+	}
+	return false
 }
 
 func (str String) Upcase() String {

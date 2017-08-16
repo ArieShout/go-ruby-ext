@@ -7,8 +7,8 @@ import (
 )
 
 type Range struct {
-	Begin, End int
-	ExcludeEnd bool
+	first, last int
+	excludeEnd  bool
 }
 
 func NewRange(begin, end int) Range {
@@ -28,14 +28,14 @@ func (r Range) OpCaseEquals(obj interface{}) bool {
 }
 
 func (r Range) actualEnd() int {
-	if r.ExcludeEnd {
-		return r.End - 1
+	if r.excludeEnd {
+		return r.last - 1
 	}
-	return r.End
+	return r.last
 }
 
 func (r Range) Bsearch(pred func(int) bool) (ret int, found bool) {
-	begin, end := r.Begin, r.actualEnd()
+	begin, end := r.first, r.actualEnd()
 	if begin > end {
 		return
 	}
@@ -66,14 +66,18 @@ func (r Range) BsearchAny(pred func(int) int) (int, bool) {
 
 func (r Range) IsCover(obj interface{}) bool {
 	if rhs, ok := obj.(int); ok {
-		return rhs >= r.Begin && (rhs < r.End || (rhs == r.End && !r.ExcludeEnd))
+		return rhs >= r.first && (rhs < r.last || (rhs == r.last && !r.excludeEnd))
 	}
 	return false
 }
 
+func (r Range) IsEmpty() bool {
+	return r.Size() == 0
+}
+
 func (r Range) Each(action func(int)) {
 	defer RecoverBreak("")
-	for i, end := r.Begin, r.actualEnd(); i <= end; i++ {
+	for i, end := r.first, r.actualEnd(); i <= end; i++ {
 		action(i)
 	}
 }
@@ -85,15 +89,17 @@ func (r Range) IsEql(obj interface{}) bool {
 	return false
 }
 
-func (r Range) First() (ret int, ok bool) {
-	ret = r.Begin
-	ok = r.Begin <= r.actualEnd()
-	return
+func (r Range) ExcludeEnd() bool {
+	return r.excludeEnd
+}
+
+func (r Range) First() int {
+	return r.first
 }
 
 func (r Range) FirstSlice(limit int) []int {
 	ret := make([]int, 0, limit)
-	for count, i, end := 0, r.Begin, r.actualEnd(); count < limit && i <= end; i++ {
+	for count, i, end := 0, r.first, r.actualEnd(); count < limit && i <= end; i++ {
 		ret = append(ret, i)
 		count++
 	}
@@ -105,21 +111,20 @@ func (r Range) IsInclude(obj interface{}) bool {
 }
 
 func (r Range) Inspect() string {
-	if r.ExcludeEnd {
-		return fmt.Sprintf("%d...%d", r.Begin, r.End)
+	if r.excludeEnd {
+		return fmt.Sprintf("%d...%d", r.first, r.last)
 	} else {
-		return fmt.Sprintf("%d..%d", r.Begin, r.End)
+		return fmt.Sprintf("%d..%d", r.first, r.last)
 	}
 }
 
-func (r Range) Last() (end int, ok bool) {
-	end = r.actualEnd()
-	ok = r.Begin <= end
-	return
+func (r Range) Last() int {
+	return r.last
 }
 
 func (r Range) Max() (max int, ok bool) {
-	return r.Last()
+	last := r.actualEnd()
+	return last, r.First() <= last
 }
 
 func (r Range) IsMember(obj interface{}) bool {
@@ -127,13 +132,13 @@ func (r Range) IsMember(obj interface{}) bool {
 }
 
 func (r Range) Min() (min int, ok bool) {
-	min = r.Begin
-	ok = r.Begin <= r.actualEnd()
+	min = r.first
+	ok = r.first <= r.actualEnd()
 	return
 }
 
 func (r Range) Size() int {
-	size := r.actualEnd() - r.Begin + 1
+	size := r.actualEnd() - r.first + 1
 	if size < 0 {
 		size = 0
 	}
@@ -142,7 +147,7 @@ func (r Range) Size() int {
 
 func (r Range) Step(step int, action func(int)) {
 	defer RecoverBreak("")
-	for i, end := r.Begin, r.actualEnd(); i < end; i += step {
+	for i, end := r.first, r.actualEnd(); i < end; i += step {
 		action(i)
 	}
 }
@@ -155,9 +160,9 @@ func (r Range) String() string {
 	var buf bytes.Buffer
 	buf.WriteRune('[')
 	end := r.actualEnd()
-	if r.Begin <= end {
-		buf.WriteString(strconv.Itoa(r.Begin))
-		for i := r.Begin + 1; i <= end; i++ {
+	if r.first <= end {
+		buf.WriteString(strconv.Itoa(r.first))
+		for i := r.first + 1; i <= end; i++ {
 			buf.WriteRune(',')
 			buf.WriteRune(' ')
 			buf.WriteString(strconv.Itoa(i))
