@@ -569,9 +569,7 @@ func (str String) Gsub(re regexp.Regexp, replacement interface{}) String {
 	if indexes == nil {
 		return NewString(str.Value)
 	}
-	for _, pos := range indexes {
-
-	}
+	return str
 }
 
 func (str String) IsEql(obj interface{}) bool {
